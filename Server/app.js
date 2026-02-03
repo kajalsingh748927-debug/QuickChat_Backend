@@ -20,15 +20,21 @@ const app = express();
 /* ======================
    MIDDLEWARE
 ====================== */
+app.use(express.urlencoded({ extended: true }));
+
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL, // 🔥 dynamic
+    origin: [
+      "http://localhost:5173",                 // local dev
+      "https://quickchat-drab.vercel.app"      // production frontend
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
   })
 );
 
 app.use(cookieParser());
-app.use(express.json());
+
 
 /* ======================
    ROUTES
