@@ -12,29 +12,43 @@ import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import connectDB from "./config/db.js";
 
-// ✅ Connect DB
+/* ======================
+   CONNECT DATABASE
+====================== */
 connectDB();
 
 const app = express();
 
 /* ======================
+   ALLOWED ORIGINS
+====================== */
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://quickchat-drab.vercel.app",
+];
+
+/* ======================
    MIDDLEWARE
 ====================== */
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",                 // local dev
-      "https://quickchat-drab.vercel.app"      // production frontend
-    ],
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true); // Postman / server calls
+
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("CORS not allowed"));
+      }
+    },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   })
 );
-
-app.use(cookieParser());
-
 
 /* ======================
    ROUTES
@@ -52,91 +66,34 @@ const server = createServer(app);
 ====================== */
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL, // 🔥 dynamic
-    methods: ["GET", "POST"],
+    origin: allowedOrigins,
     credentials: true,
   },
 });
 
 /* ======================
-   SOCKET AUTH MIDDLEWARE
+   SOCKET AUTH
 ====================== */
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token;
 
   if (!token) {
-    return next(new Error("Authentication error: no token"));
+    return next(new Error("Authentication error: No token"));
   }
 
   try {
-    const user = jwt.verify(token, process.env.JWT_SECRET); // 🔥 env secret
+    const user = jwt.verify(token, process.env.JWT_SECRET);
     socket.user = user;
     next();
-  } catch (err) {
-    next(new Error("Authentication error: invalid token"));
+  } catch (error) {
+    next(new Error("Authentication error: Invalid token"));
   }
 });
 
 /* ======================
    SOCKET EVENTS
 ====================== */
-const onlineUsers = {}; // { roomName: [email1, email2] }
+const onlineUsers = {}; // { room: [emails] }
 
-io.on("connection", (socket) => {
-  console.log("⚡ User connected:", socket.user.email);
+io.on("connection",
 
-  socket.on("roomNumber", (roomName) => {
-    socket.join(roomName);
-
-    if (!onlineUsers[roomName]) {
-      onlineUsers[roomName] = [];
-    }
-
-    if (!onlineUsers[roomName].includes(socket.user.email)) {
-      onlineUsers[roomName].push(socket.user.email);
-    }
-
-    io.to(roomName).emit("onlineUsers", onlineUsers[roomName]);
-    io.to(roomName).emit(
-      "message",
-      `🔔 ${socket.user.email} joined ${roomName}`
-    );
-  });
-
-  socket.on("sendRoomMessage", ({ room, msg, sender }) => {
-    io.to(room).emit("message", `${sender}: ${msg}`);
-  });
-
-  socket.on("leaveRoom", (room) => {
-    socket.leave(room);
-
-    if (onlineUsers[room]) {
-      onlineUsers[room] = onlineUsers[room].filter(
-        (u) => u !== socket.user.email
-      );
-
-      io.to(room).emit("onlineUsers", onlineUsers[room]);
-    }
-
-    io.to(room).emit(
-      "message",
-      `🔔 ${socket.user.email} left ${room}`
-    );
-  });
-
-  socket.on("typing", (data) => {
-    socket.to(data.room).emit("typing", data);
-  });
-
-  socket.on("disconnect", () => {
-    console.log("❌ User disconnected:", socket.user.email);
-  });
-});
-
-/* ======================
-   SERVER START
-====================== */
-const PORT = process.env.PORT || 8000; // 🔥 Render provides PORT
-server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
