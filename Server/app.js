@@ -1,16 +1,18 @@
 import express from "express";
 import dotenv from "dotenv";
-dotenv.config();
-
 import mongoose from "mongoose";
-import authRoutes from "./Router/auth.router.js";
-import productRoutes from "./Router/product.js";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
+
+// Config & Routes
 import connectDB from "./config/db.js";
+import authRoutes from "./Router/auth.router.js";
+import productRoutes from "./Router/product.js";
+
+dotenv.config();
 
 // ======================
 // CONNECT DB
@@ -20,12 +22,10 @@ connectDB();
 const app = express();
 
 // ======================
-// MIDDLEWARE
+// MIDDLEWARE (Order Matters!)
 // ======================
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
 
+// 1. CORS must be first to handle Pre-flight OPTIONS requests
 app.use(
   cors({
     origin: [
@@ -34,8 +34,14 @@ app.use(
     ],
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
+
+// 2. Request Parsers
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 // ======================
 // ROUTES
@@ -43,14 +49,16 @@ app.use(
 app.use("/api", authRoutes);
 app.use("/api/products", productRoutes);
 
+// Health check for Render deployment
+app.get("/", (req, res) => {
+  res.send("Server is running smoothly! 🚀");
+});
+
 // ======================
-// HTTP SERVER
+// HTTP SERVER & SOCKET.IO
 // ======================
 const server = createServer(app);
 
-// ======================
-// SOCKET.IO
-// ======================
 const io = new Server(server, {
   cors: {
     origin: [
@@ -63,7 +71,7 @@ const io = new Server(server, {
 });
 
 // ======================
-// SOCKET AUTH
+// SOCKET AUTH MIDDLEWARE
 // ======================
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token;
@@ -101,14 +109,14 @@ io.on("connection", (socket) => {
     }
 
     io.to(roomName).emit("onlineUsers", onlineUsers[roomName]);
-    io.to(roomName).emit(
-      "message",
-      `🔔 ${socket.user.email} joined ${roomName}`
-    );
+    io.to(roomName).emit("message", {
+        sender: "System",
+        text: `🔔 ${socket.user.email} joined ${roomName}`
+    });
   });
 
   socket.on("sendRoomMessage", ({ room, msg, sender }) => {
-    io.to(room).emit("message", `${sender}: ${msg}`);
+    io.to(room).emit("message", { sender, text: msg });
   });
 
   socket.on("leaveRoom", (room) => {
@@ -121,10 +129,10 @@ io.on("connection", (socket) => {
       io.to(room).emit("onlineUsers", onlineUsers[room]);
     }
 
-    io.to(room).emit(
-      "message",
-      `🔔 ${socket.user.email} left ${room}`
-    );
+    io.to(room).emit("message", {
+        sender: "System",
+        text: `🔔 ${socket.user.email} left ${room}`
+    });
   });
 
   socket.on("typing", (data) => {
@@ -132,7 +140,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
-    console.log("❌ User disconnected:", socket.user.email);
+    console.log("❌ User disconnected:", socket.user?.email);
   });
 });
 
