@@ -1,87 +1,51 @@
+import "dotenv/config";
 import express from "express";
-import dotenv from "dotenv";
 import mongoose from "mongoose";
+import authRoutes from "./Router/auth.router.js";
+import productRoutes from "./Router/product.js";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 
-// Config & Routes
-import connectDB from "./config/db.js";
-import authRoutes from "./Router/auth.router.js";
-import productRoutes from "./Router/product.js";
+const MONGO_URL = process.env.MONGODB_URL || "mongodb://127.0.0.1:27017/User";
+const JWT_SECRET = process.env.JWT_SECRET || "abhishek";
+const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5000";
 
-dotenv.config();
-
-// ======================
-// CONNECT DB
-// ======================
-connectDB();
+mongoose.connect(MONGO_URL)
+.then(() => console.log("MongoDB connected"))
+.catch(err => console.log("MongoDB connection error:", err));
 
 const app = express();
 
-// ======================
-// MIDDLEWARE (Order Matters!)
-// ======================
-
-// 1. CORS must be first to handle Pre-flight OPTIONS requests
-app.use(
-  cors({
-    origin: [
-      "http://localhost:5173",
-      "https://quickchat-drab.vercel.app",
-    ],
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
-
-// 2. Request Parsers
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(cors({
+  origin: CLIENT_URL,
+  credentials: true
+}));
 app.use(cookieParser());
+app.use(express.json());
 
-// ======================
-// ROUTES
-// ======================
 app.use("/api", authRoutes);
 app.use("/api/products", productRoutes);
 
-// Health check for Render deployment
-app.get("/", (req, res) => {
-  res.send("Server is running smoothly! 🚀");
-});
-
-// ======================
-// HTTP SERVER & SOCKET.IO
-// ======================
 const server = createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: [
-      "http://localhost:5173",
-      "https://quickchat-drab.vercel.app",
-    ],
+    origin: CLIENT_URL,
     methods: ["GET", "POST"],
-    credentials: true,
-  },
+    credentials: true
+  }
 });
 
-// ======================
-// SOCKET AUTH MIDDLEWARE
-// ======================
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token;
 
-  if (!token) {
-    return next(new Error("Authentication error: no token"));
-  }
+  if (!token) return next(new Error("Authentication error: no token"));
 
   try {
-    const user = jwt.verify(token, process.env.JWT_SECRET);
+    const user = jwt.verify(token, JWT_SECRET);
     socket.user = user;
     next();
   } catch (err) {
@@ -89,13 +53,10 @@ io.use((socket, next) => {
   }
 });
 
-// ======================
-// SOCKET EVENTS
-// ======================
 const onlineUsers = {};
 
 io.on("connection", (socket) => {
-  console.log("⚡ User connected:", socket.user.email);
+  console.log("User connected:", socket.user.email);
 
   socket.on("roomNumber", (roomName) => {
     socket.join(roomName);
@@ -109,30 +70,22 @@ io.on("connection", (socket) => {
     }
 
     io.to(roomName).emit("onlineUsers", onlineUsers[roomName]);
-    io.to(roomName).emit("message", {
-        sender: "System",
-        text: `🔔 ${socket.user.email} joined ${roomName}`
-    });
+    io.to(roomName).emit("message", `${socket.user.email} joined ${roomName}`);
   });
 
   socket.on("sendRoomMessage", ({ room, msg, sender }) => {
-    io.to(room).emit("message", { sender, text: msg });
+    io.to(room).emit("message", `${sender}: ${msg}`);
   });
 
   socket.on("leaveRoom", (room) => {
     socket.leave(room);
-
     if (onlineUsers[room]) {
       onlineUsers[room] = onlineUsers[room].filter(
         (u) => u !== socket.user.email
       );
       io.to(room).emit("onlineUsers", onlineUsers[room]);
     }
-
-    io.to(room).emit("message", {
-        sender: "System",
-        text: `🔔 ${socket.user.email} left ${room}`
-    });
+    io.to(room).emit("message", `${socket.user.email} left ${room}`);
   });
 
   socket.on("typing", (data) => {
@@ -140,15 +93,11 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
-    console.log("❌ User disconnected:", socket.user?.email);
+    console.log("User disconnected:", socket.user.email);
   });
 });
 
-// ======================
-// START SERVER
-// ======================
-const PORT = process.env.PORT || 8000;
-
-server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+const PORT = process.env.SERVER_PORT || 3000;
+server.listen(PORT, "localhost", () => {
+  console.log(`Server running on port ${PORT}`);
 });

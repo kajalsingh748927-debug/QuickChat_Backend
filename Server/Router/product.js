@@ -1,7 +1,6 @@
 import express from "express";
 import Product from "../Models/auth/Product.js";
 import authMiddleware from "../middleware/authenticate.js"; // tumhare JWT verify ka code
-import User from '../Models/auth/signup.model.js'
 
 const router = express.Router();
 
