@@ -17,7 +17,7 @@ const server = createServer(app); // ✅ 2. Phir server create karein
 const MONGO_URL = process.env.MONGODB_URL ;
 const JWT_SECRET = process.env.JWT_SECRET || "abhishek";
 // FRONTEND_URL aapke dashboard mein hai, ise CLIENT_URL ke barabar set karein
-const CLIENT_URL = process.env.CLIENT_URL || process.env.FRONTEND_URL || "http://localhost:5173";
+const CLIENT_URL = process.env.CLIENT_URL ;
 
 const allowedOrigins = [
   "http://localhost:5173",
