@@ -12,58 +12,56 @@ import jwt from "jsonwebtoken";
 const app = express();
 const server = createServer(app);
 
-// ✅ 1. Database Connection (Ye add karna zaroori hai)
-const MONGO_URL = process.env.MONGODB_URL; 
-if (!MONGO_URL) {
-    console.error("CRITICAL ERROR: MONGODB_URL is not defined in Environment Variables!");
-}
+/* ======================
+   DATABASE CONNECTION
+====================== */
+// Render par MONGODB_URL hona chahiye, Local par default fallback
+const MONGO_URI = process.env.MONGODB_URL || "mongodb://127.0.0.1:27017/User";
 
-mongoose.connect(MONGO_URL)
-  .then(() => console.log("✅ MongoDB Connected Successfully"))
-  .catch(err => console.error("❌ MongoDB Connection Error:", err.message));
+mongoose.connect(MONGO_URI)
+  .then(() => console.log("🚀 MongoDB Connected Successfully"))
+  .catch(err => {
+    console.error("❌ MongoDB Connection Failed:", err.message);
+    process.exit(1); // Server stop kar dega agar DB connect nahi hua
+  });
 
-const JWT_SECRET = process.env.JWT_SECRET || "abhishek";
-const CLIENT_URL = process.env.CLIENT_URL || "https://quickchat-drab.vercel.app";
+/* ======================
+   MIDDLEWARE & CORS
+====================== */
+const FRONTEND_URL = process.env.CLIENT_URL || "https://quickchat-drab.vercel.app";
 
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:5000",
-  "https://quickchat-drab.vercel.app",
-  CLIENT_URL 
-];
-
-// ✅ 2. CORS Configuration
 app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS"));
-    }
-  },
+  origin: [FRONTEND_URL, "http://localhost:5173"],
   credentials: true
 }));
 
 app.use(cookieParser());
 app.use(express.json());
 
-// Routes
+/* ======================
+   ROUTES
+====================== */
 app.use("/api", authRoutes);
 app.use("/api/products", productRoutes);
 
-// ✅ 3. Socket.io Setup
+/* ======================
+   SOCKET.IO SETUP
+====================== */
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: [FRONTEND_URL, "http://localhost:5173"],
     methods: ["GET", "POST"],
     credentials: true
   }
 });
 
+// Socket Auth Middleware
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token;
   if (!token) return next(new Error("Authentication error: no token"));
+  
   try {
+    const JWT_SECRET = process.env.JWT_SECRET || "abhishek";
     const user = jwt.verify(token, JWT_SECRET);
     socket.user = user;
     next();
@@ -75,19 +73,28 @@ io.use((socket, next) => {
 const onlineUsers = {};
 
 io.on("connection", (socket) => {
-  if (socket.user) {
-      console.log("User connected:", socket.user.email);
-  }
-  
-  // Room logic... (Keep your existing socket event listeners here)
+  console.log("⚡ User connected:", socket.user.email);
+
+  socket.on("roomNumber", (roomName) => {
+    socket.join(roomName);
+    if (!onlineUsers[roomName]) onlineUsers[roomName] = [];
+    if (!onlineUsers[roomName].includes(socket.user.email)) {
+      onlineUsers[roomName].push(socket.user.email);
+    }
+    io.to(roomName).emit("onlineUsers", onlineUsers[roomName]);
+  });
+
   socket.on("disconnect", () => {
-    console.log("User disconnected");
+    console.log("❌ User disconnected");
   });
 });
 
-// ✅ 4. Render Port Binding
+/* ======================
+   SERVER START (RENDER FIX)
+====================== */
+// Render automatically PORT variable provide karta hai
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`✅ Server running on port ${PORT}`);
 });
