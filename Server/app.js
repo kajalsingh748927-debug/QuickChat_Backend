@@ -14,7 +14,7 @@ const server = createServer(app); // ✅ 2. Phir server create karein
 
 
 // ✅ Dashbaord variables ko code ke variables se match karein
-const MONGO_URL = process.env.MONGODB_URL || process.env.MONGO_URL || "mongodb://127.0.0.1:27017/User";
+const MONGO_URL = process.env.MONGODB_URL ;
 const JWT_SECRET = process.env.JWT_SECRET || "abhishek";
 // FRONTEND_URL aapke dashboard mein hai, ise CLIENT_URL ke barabar set karein
 const CLIENT_URL = process.env.CLIENT_URL || process.env.FRONTEND_URL || "http://localhost:5173";
