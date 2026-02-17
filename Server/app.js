@@ -11,18 +11,35 @@ import jwt from "jsonwebtoken";
 
 const MONGO_URL = process.env.MONGODB_URL || "mongodb://127.0.0.1:27017/User";
 const JWT_SECRET = process.env.JWT_SECRET || "abhishek";
-const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5000";
-
-mongoose.connect(MONGO_URL)
-.then(() => console.log("MongoDB connected"))
-.catch(err => console.log("MongoDB connection error:", err));
-
-const app = express();
+// ✅ Allowed Origins for Production
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:5000",
+  "https://quickchat-drab.vercel.app" // Aapka Vercel URL
+];
 
 app.use(cors({
-  origin: CLIENT_URL,
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps/Postman)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
   credentials: true
 }));
+
+// Socket.io configuration mein bhi same origins dalein
+const io = new Server(server, {
+  cors: {
+    origin: "https://quickchat-drab.vercel.app",
+    methods: ["GET", "POST"],
+    credentials: true
+  }
+});
 app.use(cookieParser());
 app.use(express.json());
 
@@ -30,14 +47,6 @@ app.use("/api", authRoutes);
 app.use("/api/products", productRoutes);
 
 const server = createServer(app);
-
-const io = new Server(server, {
-  cors: {
-    origin: CLIENT_URL,
-    methods: ["GET", "POST"],
-    credentials: true
-  }
-});
 
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token;
