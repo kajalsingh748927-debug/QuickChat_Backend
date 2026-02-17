@@ -12,14 +12,20 @@ import jwt from "jsonwebtoken";
 const app = express(); // ✅ 1. Sabse pehle app initialize karein
 const server = createServer(app); // ✅ 2. Phir server create karein
 
-const MONGO_URL = process.env.MONGODB_URL || "mongodb://127.0.0.1:27017/User";
+
+// ✅ Dashbaord variables ko code ke variables se match karein
+const MONGO_URL = process.env.MONGODB_URL || process.env.MONGO_URL || "mongodb://127.0.0.1:27017/User";
 const JWT_SECRET = process.env.JWT_SECRET || "abhishek";
+// FRONTEND_URL aapke dashboard mein hai, ise CLIENT_URL ke barabar set karein
+const CLIENT_URL = process.env.CLIENT_URL || process.env.FRONTEND_URL || "http://localhost:5173";
 
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:5000",
-  "https://quickchat-drab.vercel.app" 
+  "https://quickchat-drab.vercel.app",
+  CLIENT_URL // Dashboard wala URL auto-include ho jayega
 ];
+
 
 // ✅ CORS logic optimized
 app.use(cors({
@@ -32,6 +38,14 @@ app.use(cors({
   },
   credentials: true
 }));
+
+
+
+
+
+
+
+
 
 app.use(cookieParser());
 app.use(express.json());
