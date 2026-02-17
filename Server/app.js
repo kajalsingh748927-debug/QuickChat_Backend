@@ -9,25 +9,30 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 
-const app = express(); // ✅ 1. Sabse pehle app initialize karein
-const server = createServer(app); // ✅ 2. Phir server create karein
+const app = express();
+const server = createServer(app);
 
+// ✅ 1. Database Connection (Ye add karna zaroori hai)
+const MONGO_URL = process.env.MONGODB_URL; 
+if (!MONGO_URL) {
+    console.error("CRITICAL ERROR: MONGODB_URL is not defined in Environment Variables!");
+}
 
-// ✅ Dashbaord variables ko code ke variables se match karein
-const MONGO_URL = process.env.MONGODB_URL ;
+mongoose.connect(MONGO_URL)
+  .then(() => console.log("✅ MongoDB Connected Successfully"))
+  .catch(err => console.error("❌ MongoDB Connection Error:", err.message));
+
 const JWT_SECRET = process.env.JWT_SECRET || "abhishek";
-// FRONTEND_URL aapke dashboard mein hai, ise CLIENT_URL ke barabar set karein
-const CLIENT_URL = process.env.CLIENT_URL ;
+const CLIENT_URL = process.env.CLIENT_URL || "https://quickchat-drab.vercel.app";
 
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:5000",
   "https://quickchat-drab.vercel.app",
-  CLIENT_URL // Dashboard wala URL auto-include ho jayega
+  CLIENT_URL 
 ];
 
-
-// ✅ CORS logic optimized
+// ✅ 2. CORS Configuration
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
@@ -39,14 +44,6 @@ app.use(cors({
   credentials: true
 }));
 
-
-
-
-
-
-
-
-
 app.use(cookieParser());
 app.use(express.json());
 
@@ -54,7 +51,7 @@ app.use(express.json());
 app.use("/api", authRoutes);
 app.use("/api/products", productRoutes);
 
-// ✅ Socket.io configuration correctly initialized
+// ✅ 3. Socket.io Setup
 const io = new Server(server, {
   cors: {
     origin: allowedOrigins,
@@ -62,8 +59,6 @@ const io = new Server(server, {
     credentials: true
   }
 });
-
-// 
 
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token;
@@ -79,16 +74,20 @@ io.use((socket, next) => {
 
 const onlineUsers = {};
 
-// ... (Socket events logic as it was)
 io.on("connection", (socket) => {
-  console.log("User connected:", socket.user.email);
-  // ... (baaki socket logic same rahegi)
+  if (socket.user) {
+      console.log("User connected:", socket.user.email);
+  }
+  
+  // Room logic... (Keep your existing socket event listeners here)
+  socket.on("disconnect", () => {
+    console.log("User disconnected");
+  });
 });
 
-// ✅ Render FIX: "localhost" hata kar "0.0.0.0" use karein
-// Render hamesha process.env.PORT provide karta hai
+// ✅ 4. Render Port Binding
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
